@@ -348,4 +348,166 @@ void AhmiyatChain::addBlock(const std::vector<Transaction>& txs, const MemoryFra
                     continue;
                     }
                 shardBalances[shardId][tx.sender] -= (tx.amount + tx.fee);
-                shardBalances[shardId][t
+                shardBalances[shardId][tx.receiver] += tx.amount;
+                totalFee += tx.fee;
+            }
+            shardBalances[shardId][minerId] += blockReward + totalFee;
+            if (stake > 0) shardBalances[shardId][minerId] += stakingReward;
+            totalMined += blockReward;
+            updateReward(shardId);
+            broadcastBlock(newBlock, nodes[0]);
+            compressState(shardId);
+        });
+    }
+    for (auto& t : blockThreads) t.join();
+}
+
+void AhmiyatChain::addNode(std::string nodeId, std::string ip, int port) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    Node newNode(nodeId, ip, port);
+    nodes.push_back(newNode);
+    dht.addPeer(newNode);
+}
+
+double AhmiyatChain::getBalance(std::string address, std::string shardId) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    return shardBalances[shardId][address];
+}
+
+void AhmiyatChain::stakeCoins(std::string address, double amount, std::string shardId) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    if (shardBalances[shardId][address] >= amount) {
+        shardBalances[shardId][address] -= amount;
+        shardStakes[shardId][address] += amount;
+        log(address + " staked " + std::to_string(amount) + " AHM in shard " + shardId);
+    }
+}
+
+void AhmiyatChain::adjustDifficulty(std::string shardId) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    if (shards[shardId].size() > 10) {
+        uint64_t lastTenTime = shards[shardId].back().timestamp - shards[shardId][shards[shardId].size() - 10].timestamp;
+        double avgStake = 0;
+        for (const auto& block : shards[shardId]) avgStake += block.getStakeWeight();
+        avgStake /= shards[shardId].size();
+        if (lastTenTime < 60'000'000 || avgStake > 1000) shardDifficulties[shardId]++;
+        else if (lastTenTime > 120'000'000) shardDifficulties[shardId]--;
+        log("Difficulty adjusted in shard " + shardId + " to: " + std::to_string(shardDifficulties[shardId]));
+    }
+}
+
+void AhmiyatChain::startNodeListener(int port) {
+    int serverSock = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSock < 0) {
+        log("Socket creation failed");
+        return;
+    }
+
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    int opt = 1;
+    setsockopt(serverSock, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
+
+    if (bind(serverSock, (sockaddr*)&addr, sizeof(addr)) < 0) {
+        log("Bind failed on port " + std::to_string(port));
+        close(serverSock);
+        return;
+    }
+    listen(serverSock, 20);
+    log("Node listening on port " + std::to_string(port));
+
+    std::vector<std::thread> listenerThreads;
+    while (true) {
+        int clientSock = accept(serverSock, nullptr, nullptr);
+        if (clientSock < 0) {
+            log("Accept failed");
+            continue;
+        }
+        listenerThreads.emplace_back([&, clientSock]() {
+            char buffer[4096] = {0};
+            if (read(clientSock, buffer, 4096) > 0) {
+                std::string data(buffer);
+                syncChain(data);
+                processPendingTxs();
+            }
+            close(clientSock);
+        });
+        if (listenerThreads.size() > 100) {
+            for (auto it = listenerThreads.begin(); it != listenerThreads.end();) {
+                if (it->joinable()) {
+                    it->join();
+                    it = listenerThreads.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+    }
+    close(serverSock);
+}
+
+void AhmiyatChain::stressTest(int numBlocks) {
+    Wallet wallet;
+    std::vector<std::thread> testThreads;
+    for (int i = 0; i < numBlocks; i++) {
+        testThreads.emplace_back([&, i]() {
+            std::vector<Transaction> txs = {Transaction(wallet.publicKey, "test" + std::to_string(i), 1.0)};
+            MemoryFragment mem("text", "memories/test" + std::to_string(i) + ".txt", "Test block", wallet.publicKey, 0);
+            addBlock(txs, mem, wallet.publicKey, shardStakes[assignShard(txs[0])][wallet.publicKey]);
+        });
+    }
+    for (auto& t : testThreads) t.join();
+    log("Stress test completed: " + std::to_string(numBlocks) + " blocks added across shards");
+}
+
+void AhmiyatChain::proposeUpgrade(std::string proposerId, std::string description) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    std::string proposalId = proposerId + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    governanceProposals[proposalId] = {description, 0};
+    log("Proposal " + proposalId + " submitted: " + description);
+}
+
+void AhmiyatChain::voteForUpgrade(std::string voterId, std::string proposalId) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    for (const auto& [shardId, stakes] : shardStakes) {
+        if (stakes.count(voterId)) {
+            governanceProposals[proposalId].second += stakes.at(voterId);
+            log(voterId + " voted for " + proposalId + " with " + std::to_string(stakes.at(voterId)) + " stake");
+        }
+    }
+}
+
+std::string AhmiyatChain::getShardStatus(std::string shardId) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    std::stringstream ss;
+    ss << "Shard " << shardId << ":\n";
+    ss << "Blocks: " << shards[shardId].size() << "\n";
+    ss << "Total Balance: ";
+    double total = 0;
+    for (const auto& [addr, bal] : shardBalances[shardId]) total += bal;
+    ss << total << " AHM\n";
+    ss << "Difficulty: " << shardDifficulties[shardId] << "\n";
+    return ss.str();
+}
+
+void AhmiyatChain::handleCrossShardTx(const Transaction& tx) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    std::string fromShard = tx.shardId;
+    std::string toShard = assignShard(Transaction(tx.receiver, tx.sender, 0));
+    if (fromShard != toShard) {
+        if (shardBalances[fromShard][tx.sender] >= tx.amount + tx.fee) {
+            shardBalances[fromShard][tx.sender] -= (tx.amount + tx.fee);
+            shardBalances[toShard][tx.receiver] += tx.amount;
+            log("Cross-shard tx from " + fromShard + " to " + toShard + ": " + std::to_string(tx.amount) + " AHM");
+        }
+    }
+}
+
+void AhmiyatChain::addPendingTx(const Transaction& tx) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    pendingTxs.push(tx);
+    log("Added pending tx: " + tx.getHash());
+}
