@@ -1,5 +1,5 @@
 #include "blockchain.h"
-#include "utils.h"  // Added to include uploadToStorj
+#include "utils.h"
 #include <openssl/sha.h>
 #include <curl/curl.h>
 #include <random>
@@ -43,7 +43,7 @@ bool Transaction::executeScript(const std::unordered_map<std::string, double>& b
 MemoryFragment::MemoryFragment(std::string t, std::string fp, std::string desc, std::string o, int lt) 
     : type(t), filePath(fp), description(desc), owner(o), lockTime(lt) {
     saveToFile();
-    fileURL = uploadToStorj(filePath);  // Changed from uploadToIPFS
+    fileURL = uploadToStorj(filePath);
 }
 
 void MemoryFragment::saveToFile() {
@@ -62,7 +62,7 @@ std::string AhmiyatBlock::calculateHash() const {
     for (const auto& tx : transactions) {
         ss << tx.getHash();
     }
-    ss << memory.fileURL << previousHash << memoryProof << stakeWeight << shardId;  // Changed from ipfsHash
+    ss << memory.fileURL << previousHash << memoryProof << stakeWeight << shardId;
 
     std::string input = ss.str();
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -114,7 +114,7 @@ std::string AhmiyatBlock::serialize() const {
         ss << tx.sender << "," << tx.receiver << "," << tx.amount << "," << tx.fee << "," 
            << tx.signature << "," << tx.script << "," << tx.shardId << ";";
     }
-    ss << "|" << memory.type << "," << memory.fileURL << "," << memory.description << ","  // Changed from ipfsHash
+    ss << "|" << memory.type << "," << memory.fileURL << "," << memory.description << ","
        << memory.owner << "," << memory.lockTime << "|" << previousHash << "|" << memoryProof 
        << "|" << stakeWeight << "|" << shardId;
     return ss.str();
@@ -159,7 +159,7 @@ void AhmiyatChain::broadcastBlock(const AhmiyatBlock& block, const Node& sender)
     std::vector<std::thread> broadcastThreads;
     for (const auto& node : peers) {
         if (node.nodeId != sender.nodeId) {
-            broadcastThreads.emplace_back([this, blockData, node]() {
+            broadcastThreads.emplace_back([this, blockData, node, block]() {
                 int retries = 3;
                 while (retries--) {
                     int sock = socket(AF_INET, SOCK_STREAM, 0);
