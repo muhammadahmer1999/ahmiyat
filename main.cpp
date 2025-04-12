@@ -1,7 +1,17 @@
 #include "blockchain.h"
 #include <thread>
 #include <iostream>
+#include <string>
+#include <vector>
+#include <chrono>
 #include <microhttpd.h>
+
+using namespace std; // std namespace use karenge
+
+// Log function define karo
+void log(const string& message) {
+    cout << message << endl;
+}
 
 void runNode(AhmiyatChain& chain, int port) {
     chain.startNodeListener(port);
@@ -31,7 +41,7 @@ int answer_to_connection(void* cls, struct MHD_Connection* connection, const cha
         }
     } else if (string(method) == "POST" && string(url) == "/tx") {
         if (*upload_data_size) {
-            Transaction tx(string(upload_data), "receiver", 0); // Simplified parsing
+            Transaction tx(string(upload_data), "receiver", 0.0, 0.0, ""); // Simplified parsing
             chain->addPendingTx(tx);
             *upload_data_size = 0;
             response = "Transaction queued";
@@ -68,9 +78,11 @@ int main(int argc, char* argv[]) {
     system("mkdir -p memories");
 
     AhmiyatChain ahmiyat;
+    ahmiyat.initialize("genesis"); // Initialize chain with genesis block
 
-    ahmiyat.addNode("Node3", "127.0.0.1", 5003);
-    ahmiyat.dht.bootstrap("127.0.0.1", 5001);
+    ahmiyat.addNode("Node1", "node1.ahmiyat.com", 5001);
+    ahmiyat.addNode("Node2", "node2.ahmiyat.com", 5002);
+    ahmiyat.dht.bootstrap("node1.ahmiyat.com", 5001);
 
     thread nodeThread(runNode, ref(ahmiyat), port);
     thread minerThread(mineBlock, ref(ahmiyat), "Miner" + to_string(port));
@@ -83,6 +95,6 @@ int main(int argc, char* argv[]) {
     log("Optimized node running on port " + to_string(port));
 
     apiThread.join();
-    nodeThread.detach(); // Detach to allow graceful shutdown
+    nodeThread.detach();
     return 0;
 }
