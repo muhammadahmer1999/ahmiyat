@@ -1,12 +1,9 @@
 #include "dht.h"
 #include <openssl/sha.h>
 #include <netdb.h>
-#include <cstring>        // Added for memset
-#include <algorithm>      // Added for std::sort
-#include <sys/socket.h>   // Added for socket
-#include <netinet/in.h>   // Added for sockaddr_in
-#include <arpa/inet.h>    // Added for inet_pton
-#include <unistd.h>       // Added for close
+#include <cstring>
+#include <algorithm>
+#include <sstream>  // Added for ostringstream
 
 extern void log(const std::string& message);
 
@@ -15,7 +12,7 @@ Node::Node(std::string id, std::string ipAddr, int p) : nodeId(id), ip(ipAddr), 
 std::string DHT::hashNodeId(const std::string& nodeId) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256((unsigned char*)nodeId.c_str(), nodeId.length(), hash);
-    std::stringstream ss;
+    std::ostringstream ss;
     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
         ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
     }
@@ -30,16 +27,16 @@ void DHT::addPeer(const Node& node) {
 
 std::vector<Node> DHT::findPeers(const std::string& targetId, int maxPeers) {
     std::lock_guard<std::mutex> lock(dhtMutex);
-    std::vector<std::pair<std::string, Node>> sortedPeers;
+    std::vector<std::pair<std::string, Node> > sortedPeers;
     std::string targetHash = hashNodeId(targetId);
 
-    for (const auto& peer : peers) {
-        std::string peerHash = hashNodeId(peer.first);
-        sortedPeers.emplace_back(peerHash, peer.second);
+    for (std::unordered_map<std::string, Node>::const_iterator it = peers.begin(); it != peers.end(); ++it) {
+        std::string peerHash = hashNodeId(it->first);
+        sortedPeers.push_back(std::make_pair(peerHash, it->second));
     }
 
     std::sort(sortedPeers.begin(), sortedPeers.end(),
-              [&targetHash](const auto& a, const auto& b) {
+              [targetHash](const std::pair<std::string, Node>& a, const std::pair<std::string, Node>& b) {
                   return std::abs(std::stoll(a.first, nullptr, 16) - std::stoll(targetHash, nullptr, 16)) <
                          std::abs(std::stoll(b.first, nullptr, 16) - std::stoll(targetHash, nullptr, 16));
               });
