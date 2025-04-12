@@ -4,6 +4,7 @@
 #include <cstring>
 #include <algorithm>
 #include <sstream>
+#include <iomanip>  // Added for setw and setfill
 
 extern void log(const std::string& message);
 
@@ -67,7 +68,10 @@ void DHT::bootstrap(const std::string& bootstrapIp, int bootstrapPort) {
     }
 
     char buffer[1024] = {0};
-    read(sock, buffer, 1024);
+    ssize_t bytesRead = read(sock, buffer, 1024);
+    if (bytesRead < 0) {
+        log("Failed to read from bootstrap socket");
+    }
     log("Bootstrapped with: " + std::string(buffer));
     close(sock);
 }
