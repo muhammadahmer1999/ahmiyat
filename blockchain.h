@@ -12,28 +12,28 @@
 #include <leveldb/db.h>
 
 struct Transaction {
-    string sender;
-    string receiver;
+    std::string sender;
+    std::string receiver;
     double amount;
     double fee;
-    string script;
-    string signature;
-    string shardId;
-    uint64_t timestamp; // For ordering
-    Transaction(string s, string r, double a, double f = 0.001, string sc = "", string sh = "0");
-    string toString() const;
-    bool executeScript(const unordered_map<string, double>& balances);
-    string getHash() const;
+    std::string script;
+    std::string signature;
+    std::string shardId;
+    uint64_t timestamp;
+    Transaction(std::string s, std::string r, double a, double f = 0.001, std::string sc = "", std::string sh = "0");
+    std::string toString() const;
+    bool executeScript(const std::unordered_map<std::string, double>& balances);
+    std::string getHash() const;
 };
 
 struct MemoryFragment {
-    string type;
-    string filePath;
-    string ipfsHash;
-    string description;
-    string owner;
+    std::string type;
+    std::string filePath;
+    std::string ipfsHash;
+    std::string description;
+    std::string owner;
     int lockTime;
-    MemoryFragment(string t, string fp, string desc, string o, int lt = 0);
+    MemoryFragment(std::string t, std::string fp, std::string desc, std::string o, int lt = 0);
     void saveToFile();
 };
 
@@ -41,77 +41,77 @@ class AhmiyatBlock {
 private:
     int index;
     uint64_t timestamp;
-    vector<Transaction> transactions;
+    std::vector<Transaction> transactions;
     MemoryFragment memory;
-    string previousHash;
-    string hash;
+    std::string previousHash;
+    std::string hash;
     int difficulty;
-    string memoryProof;
+    std::string memoryProof;
     double stakeWeight;
-    string shardId;
-    string calculateHash() const;
+    std::string shardId;
+    std::string calculateHash() const;
     bool isMemoryProofValid(int difficulty);
 
 public:
-    AhmiyatBlock(int idx, const vector<Transaction>& txs, const MemoryFragment& mem, 
-                 string prevHash, int diff, double stake, string sh);
+    AhmiyatBlock(int idx, const std::vector<Transaction>& txs, const MemoryFragment& mem, 
+                 std::string prevHash, int diff, double stake, std::string sh);
     void mineBlock(double minerStake);
-    string getHash() const;
-    string getPreviousHash() const;
-    string serialize() const;
+    std::string getHash() const;
+    std::string getPreviousHash() const;
+    std::string serialize() const;
     double getStakeWeight() const;
-    string getShardId() const;
-    const vector<Transaction>& getTransactions() const;
+    std::string getShardId() const;
+    const std::vector<Transaction>& getTransactions() const;
 };
 
 class AhmiyatChain {
 private:
-    unordered_map<string, vector<AhmiyatBlock>> shards;
-    unordered_map<string, unordered_map<string, double>> shardBalances;
-    unordered_map<string, unordered_map<string, double>> shardStakes;
-    unordered_map<string, int> shardDifficulties; // Per-shard difficulty
-    vector<Node> nodes;
+    std::unordered_map<std::string, std::vector<AhmiyatBlock>> shards;
+    std::unordered_map<std::string, std::unordered_map<std::string, double>> shardBalances;
+    std::unordered_map<std::string, std::unordered_map<std::string, double>> shardStakes;
+    std::unordered_map<std::string, int> shardDifficulties;
+    std::vector<Node> nodes;
     DHT dht;
-    mutex chainMutex;
+    std::mutex chainMutex;
     EC_KEY* keyPair;
     leveldb::DB* db;
-    set<string> processedTxs;
-    queue<Transaction> pendingTxs; // Optimized transaction pool
+    std::set<std::string> processedTxs;
+    std::queue<Transaction> pendingTxs;
 
-    // Coin Economics
-    const string COIN_NAME = "Ahmiyat Coin";
-    const string COIN_SYMBOL = "AHM";
+    const std::string COIN_NAME = "Ahmiyat Coin";
+    const std::string COIN_SYMBOL = "AHM";
     const double MAX_SUPPLY = 21000000.0;
     double totalMined = 0.0;
     double blockReward = 50.0;
     const int HALVING_INTERVAL = 210000;
     double stakingReward = 0.1;
-    unordered_map<string, pair<string, int>> governanceProposals;
+    std::unordered_map<std::string, std::pair<std::string, int>> governanceProposals;
 
     void broadcastBlock(const AhmiyatBlock& block, const Node& sender);
-    string signTransaction(const Transaction& tx);
+    std::string signTransaction(const Transaction& tx);
+    bool verifyTransaction(const Transaction& tx);
     void saveBlockToDB(const AhmiyatBlock& block);
     void loadChainFromDB();
-    void syncChain(const string& blockData);
-    void updateReward(string shardId);
+    void syncChain(const std::string& blockData);
+    void updateReward(std::string shardId);
     bool validateBlock(const AhmiyatBlock& block);
-    void compressState(string shardId);
-    string assignShard(const Transaction& tx);
+    void compressState(std::string shardId);
+    std::string assignShard(const Transaction& tx);
     void processPendingTxs();
 
 public:
     AhmiyatChain();
     ~AhmiyatChain();
-    void addBlock(const vector<Transaction>& txs, const MemoryFragment& memory, string minerId, double stake);
-    void addNode(string nodeId, string ip, int port);
-    double getBalance(string address, string shardId = "0");
-    void stakeCoins(string address, double amount, string shardId = "0");
-    void adjustDifficulty(string shardId);
+    void addBlock(const std::vector<Transaction>& txs, const MemoryFragment& memory, std::string minerId, double stake);
+    void addNode(std::string nodeId, std::string ip, int port);
+    double getBalance(std::string address, std::string shardId = "0");
+    void stakeCoins(std::string address, double amount, std::string shardId = "0");
+    void adjustDifficulty(std::string shardId);
     void startNodeListener(int port);
     void stressTest(int numBlocks);
-    void proposeUpgrade(string proposerId, string description);
-    void voteForUpgrade(string voterId, string proposalId);
-    string getShardStatus(string shardId);
+    void proposeUpgrade(std::string proposerId, std::string description);
+    void voteForUpgrade(std::string voterId, std::string proposalId);
+    std::string getShardStatus(std::string shardId);
     void handleCrossShardTx(const Transaction& tx);
     void addPendingTx(const Transaction& tx);
 };
