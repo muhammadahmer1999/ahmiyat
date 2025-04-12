@@ -8,7 +8,7 @@ sudo apt-get install -y software-properties-common
 
 # Add additional repositories if needed
 echo "Adding repositories for required packages..."
-sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+sudo add-apt-repository ppa:Ubuntu-toolchain-r/test -y
 sudo apt-get update -y
 
 echo "Installing dependencies..."
@@ -37,19 +37,19 @@ if [ -z "$STORJ_ACCESS_GRANT" ]; then
     exit 1
 fi
 
-# Import the access grant
-uplink access import ahmiyat "$STORJ_ACCESS_GRANT"
+# Import the access grant with --force to overwrite if exists
+uplink access import ahmiyat "$STORJ_ACCESS_GRANT" --force
 
-# Create a bucket for storing files
+# Create a bucket for storing files, ignore if already exists
 echo "Creating Storj bucket..."
-uplink mb sj://ahmiyat-bucket
+uplink mb sj://ahmiyat-bucket || echo "Bucket 'ahmiyat-bucket' already exists, proceeding..."
 
 # Share the bucket to ensure accessibility (optional, for read-only public access if needed)
 uplink share --url --readonly sj://ahmiyat-bucket > /dev/null
 if [ $? -eq 0 ]; then
     echo "Storj bucket 'ahmiyat-bucket' created and shared successfully!"
 else
-    echo "Failed to create or share Storj bucket. Please check manually."
+    echo "Failed to share Storj bucket. Please check manually."
     exit 1
 fi
 
