@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <vector>
+#include <utility> // Added for pair
 
 struct Node {
     std::string nodeId;
