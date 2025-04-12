@@ -1,48 +1,69 @@
 #include "utils.h"
 #include <fstream>
-#include <sstream>
-#include <iomanip>
 #include <curl/curl.h>
-#include <cstdlib>
-#include <algorithm>
+#include <openssl/sha.h>
+#include <filesystem>
 
-void log(const std::string& message) {
-    std::ofstream logFile("simple_ahmiyat.log", std::ios::app);
-    logFile << "[" << time(nullptr) << "] " << message << std::endl;
+void log(const string& message) {
+    static const size_t MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
+    string logFile = "ahmiyat.log";
+    if (filesystem::exists(logFile) && filesystem::file_size(logFile) > MAX_LOG_SIZE) {
+        filesystem::rename(logFile, logFile + ".bak");
+    }
+    ofstream file(logFile, ios::app);
+    file << "[" << time(nullptr) << "] " << message << endl;
 }
 
-std::string uploadToStorj(const std::string& filePath) {
-    log("Uploading file to Storj: " + filePath);
+size_t writeCallback(void* contents, size_t size, size_t nmemb, string* data) {
+    data->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
 
-    std::string fileName = filePath.substr(filePath.find_last_of("/\\") + 1);
-    std::string storjPath = "sj://ahmiyat-bucket/" + fileName;
-    std::string command = "uplink cp " + filePath + " " + storjPath + " 2>&1";
-    int sysResult = system(command.c_str());
-    if (sysResult != 0) {
-        log("System command failed for upload: " + command);
+string uploadToIPFS(const string& filePath) {
+    const int retries = 3;
+    for (int i = 0; i < retries; i++) {
+        try {
+            CURL* curl = curl_easy_init();
+            if (!curl) throw runtime_error("CURL init failed");
+
+            string response;
+            CURLcode res;
+            curl_mime* mime = curl_mime_init(curl);
+            curl_mimepart* part = curl_mime_addpart(mime);
+            curl_mime_name(part, "file");
+            curl_mime_filedata(part, filePath.c_str());
+
+            curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:5001/api/v0/add");
+            curl_easy_setopt(curl, CURLOPT_MIMEPOST, mime);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+            res = curl_easy_perform(curl);
+            curl_mime_free(mime);
+            curl_easy_cleanup(curl);
+
+            if (res != CURLE_OK) {
+                throw runtime_error(curl_easy_strerror(res));
+            }
+
+            size_t pos = response.find("\"Hash\":\"") + 8;
+            size_t end = response.find("\"", pos);
+            return response.substr(pos, end - pos);
+        } catch (const exception& e) {
+            log("IPFS upload attempt " + to_string(i + 1) + " failed: " + e.what());
+            this_thread::sleep_for(chrono::seconds(1));
+        }
     }
-    log("File uploaded to Storj: " + storjPath);
+    log("IPFS upload failed after " + to_string(retries) + " attempts");
+    return "ERROR";
+}
 
-    std::string shareCommand = "uplink share --url --readonly " + storjPath + " | grep URL | awk '{print $2}'";
-    FILE* pipe = popen(shareCommand.c_str(), "r");
-    if (!pipe) {
-        log("Failed to get Storj URL for " + storjPath);
-        return "STORJ_UPLOAD_FAILED";
+string generateZKProof(const string& data) {
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)data.c_str(), data.length(), hash);
+    stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << hex << setw(2) << setfill('0') << (int)hash[i];
     }
-
-    char buffer[128];
-    std::string result = "";
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        result += buffer;
-    }
-    pclose(pipe);
-
-    result.erase(std::remove_if(result.begin(), result.end(), [](char c) { return c == '\n'; }), result.end());
-    if (result.empty()) {
-        log("Failed to retrieve shareable URL for " + storjPath);
-        return storjPath;
-    }
-
-    log("File accessible at: " + result);
-    return result;
+    return "ZKP_" + ss.str().substr(0, 16);
 }
