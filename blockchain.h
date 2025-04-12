@@ -7,6 +7,8 @@
 #include <mutex>
 #include <set>
 #include <queue>
+#include <sstream> // Added for stringstream
+#include <thread>  // Added for thread
 #include "wallet.h"
 #include "dht.h"
 #include <leveldb/db.h>
