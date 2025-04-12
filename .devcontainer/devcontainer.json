@@ -1,0 +1,22 @@
+{
+    "name": "Ahmiyat Blockchain",
+    "image": "mcr.microsoft.com/vscode/devcontainers/cpp:0-ubuntu-22.04",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode-remote.remote-containers"
+            ]
+        }
+    },
+    "postCreateCommand": "bash setup.sh",
+    "portsAttributes": {
+        "5001-5003": { "label": "Blockchain Ports" },
+        "8080": { "label": "API" },
+        "5001": { "label": "IPFS" }
+    },
+    "forwardPorts": [5001, 5002, 5003, 8080, 5001]
+}
