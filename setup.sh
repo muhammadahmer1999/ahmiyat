@@ -2,6 +2,10 @@
 echo "Updating package lists..."
 sudo apt-get update -y
 
+# Install software-properties-common for add-apt-repository
+echo "Installing software-properties-common..."
+sudo apt-get install -y software-properties-common
+
 # Add additional repositories if needed
 echo "Adding repositories for required packages..."
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
@@ -13,8 +17,9 @@ sudo apt-get install -y libssl-dev libcurl4-openssl-dev
 sudo apt-get install -y libleveldb-dev || sudo apt-get install -y libsnappy-dev
 sudo apt-get install -y libmicrohttpd-dev
 sudo apt-get install -y nlohmann-json3-dev || sudo apt-get install -y libnlohmann-json-dev
+sudo apt-get install -y unzip  # Added for unzip command
 
-# Install Storj Uplink CLI (instead of IPFS)
+# Install Storj Uplink CLI
 if ! command -v uplink &> /dev/null; then
     echo "Installing Storj Uplink CLI..."
     curl -L https://github.com/storj/storj/releases/latest/download/uplink_linux_amd64.zip -o uplink.zip
@@ -24,7 +29,7 @@ if ! command -v uplink &> /dev/null; then
     chmod +x /usr/local/bin/uplink
 fi
 
-# Setup Storj (requires access key, secret key, and satellite address)
+# Setup Storj
 echo "Setting up Storj..."
 if [ -z "$STORJ_ACCESS_GRANT" ]; then
     echo "STORJ_ACCESS_GRANT environment variable not set. Please set it or run 'uplink setup' manually."
