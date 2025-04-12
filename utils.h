@@ -3,8 +3,8 @@
 
 #include <string>
 
-void log(const string& message);
-string uploadToIPFS(const string& filePath);
-string generateZKProof(const string& data);
+void log(const std::string& message);
+std::string uploadToIPFS(const std::string& filePath);
+std::string generateZKProof(const std::string& data);
 
 #endif
