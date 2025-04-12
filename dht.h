@@ -7,23 +7,23 @@
 #include <vector>
 
 struct Node {
-    string nodeId;
-    string ip;
+    std::string nodeId;
+    std::string ip;
     int port;
-    Node(string id, string ipAddr, int p);
+    Node(std::string id, std::string ipAddr, int p);
 };
 
 class DHT {
 private:
-    unordered_map<string, Node> peers;
-    mutex dhtMutex;
-    string hashNodeId(const string& nodeId);
+    std::unordered_map<std::string, Node> peers;
+    std::mutex dhtMutex;
+    std::string hashNodeId(const std::string& nodeId);
 
 public:
     void addPeer(const Node& node);
-    vector<Node> findPeers(const string& targetId, int maxPeers = 10); // Optimized
-    void bootstrap(const string& bootstrapIp, int bootstrapPort);
-    bool punchHole(const string& targetIp, int targetPort);
+    std::vector<Node> findPeers(const std::string& targetId, int maxPeers = 10);
+    void bootstrap(const std::string& bootstrapIp, int bootstrapPort);
+    bool punchHole(const std::string& targetIp, int targetPort);
 };
 
 #endif
