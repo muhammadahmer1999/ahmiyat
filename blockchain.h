@@ -7,8 +7,11 @@
 #include <mutex>
 #include <set>
 #include <queue>
-#include <sstream> // Added for stringstream
-#include <thread>  // Added for thread
+#include <sstream>
+#include <thread>
+#include <openssl/ec.h>      // Added for EC_KEY
+#include <openssl/ecdsa.h>   // Added for ECDSA
+#include <openssl/obj_mac.h> // Added for NID_secp256k1
 #include "wallet.h"
 #include "dht.h"
 #include <leveldb/db.h>
@@ -24,7 +27,7 @@ struct Transaction {
     uint64_t timestamp;
     Transaction(std::string s, std::string r, double a, double f = 0.001, std::string sc = "", std::string sh = "0");
     std::string toString() const;
-    bool executeScript(const std::unordered_map<std::string, double>& balances);
+    bool executeScript(const std::unordered_map<std::string, double>& balances) const; // Made const
     std::string getHash() const;
 };
 
@@ -51,15 +54,16 @@ private:
     std::string memoryProof;
     double stakeWeight;
     std::string shardId;
-    std::string calculateHash() const;
     bool isMemoryProofValid(int difficulty);
 
 public:
     AhmiyatBlock(int idx, const std::vector<Transaction>& txs, const MemoryFragment& mem, 
                  std::string prevHash, int diff, double stake, std::string sh);
+    std::string calculateHash() const; // Made public
     void mineBlock(double minerStake);
     std::string getHash() const;
     std::string getPreviousHash() const;
+    uint64_t getTimestamp() const; // Added getter for timestamp
     std::string serialize() const;
     double getStakeWeight() const;
     std::string getShardId() const;
@@ -73,7 +77,6 @@ private:
     std::unordered_map<std::string, std::unordered_map<std::string, double>> shardStakes;
     std::unordered_map<std::string, int> shardDifficulties;
     std::vector<Node> nodes;
-    DHT dht;
     std::mutex chainMutex;
     EC_KEY* keyPair;
     leveldb::DB* db;
@@ -102,6 +105,7 @@ private:
     void processPendingTxs();
 
 public:
+    DHT dht; // Made public
     AhmiyatChain();
     ~AhmiyatChain();
     void addBlock(const std::vector<Transaction>& txs, const MemoryFragment& memory, std::string minerId, double stake);
