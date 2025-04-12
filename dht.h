@@ -6,10 +6,10 @@
 #include <mutex>
 #include <vector>
 #include <utility>
-#include <sys/socket.h>  // Added for socket
-#include <netinet/in.h>  // Added for sockaddr_in
-#include <arpa/inet.h>   // Added for inet_pton
-#include <unistd.h>      // Added for close
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 struct Node {
     std::string nodeId;
