@@ -9,9 +9,10 @@
 #include <queue>
 #include <sstream>
 #include <thread>
-#include <openssl/ec.h>      // Added for EC_KEY
-#include <openssl/ecdsa.h>   // Added for ECDSA
-#include <openssl/obj_mac.h> // Added for NID_secp256k1
+#include <sys/socket.h>  // Added for socket
+#include <netinet/in.h>  // Added for sockaddr_in
+#include <arpa/inet.h>   // Added for inet_pton
+#include <unistd.h>      // Added for close
 #include "wallet.h"
 #include "dht.h"
 #include <leveldb/db.h>
@@ -27,7 +28,7 @@ struct Transaction {
     uint64_t timestamp;
     Transaction(std::string s, std::string r, double a, double f = 0.001, std::string sc = "", std::string sh = "0");
     std::string toString() const;
-    bool executeScript(const std::unordered_map<std::string, double>& balances) const; // Made const
+    bool executeScript(const std::unordered_map<std::string, double>& balances) const;
     std::string getHash() const;
 };
 
@@ -59,11 +60,11 @@ private:
 public:
     AhmiyatBlock(int idx, const std::vector<Transaction>& txs, const MemoryFragment& mem, 
                  std::string prevHash, int diff, double stake, std::string sh);
-    std::string calculateHash() const; // Made public
+    std::string calculateHash() const;
     void mineBlock(double minerStake);
     std::string getHash() const;
     std::string getPreviousHash() const;
-    uint64_t getTimestamp() const; // Added getter for timestamp
+    uint64_t getTimestamp() const;
     std::string serialize() const;
     double getStakeWeight() const;
     std::string getShardId() const;
@@ -78,7 +79,6 @@ private:
     std::unordered_map<std::string, int> shardDifficulties;
     std::vector<Node> nodes;
     std::mutex chainMutex;
-    EC_KEY* keyPair;
     leveldb::DB* db;
     std::set<std::string> processedTxs;
     std::queue<Transaction> pendingTxs;
@@ -105,7 +105,7 @@ private:
     void processPendingTxs();
 
 public:
-    DHT dht; // Made public
+    DHT dht;
     AhmiyatChain();
     ~AhmiyatChain();
     void addBlock(const std::vector<Transaction>& txs, const MemoryFragment& memory, std::string minerId, double stake);
