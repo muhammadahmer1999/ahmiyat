@@ -18,8 +18,7 @@ RUN apt-get update && apt-get install -y \
 RUN wget https://dist.ipfs.io/go-ipfs/v0.20.0/go-ipfs_v0.20.0_linux-amd64.tar.gz \
     && tar -xvzf go-ipfs_v0.20.0_linux-amd64.tar.gz \
     && mv go-ipfs/ipfs /usr/local/bin/ \
-    && rm -rf go-ipfs go-ipfs_v0.20.0_linux-amd64.tar.gz \
-    && ipfs init
+    && rm -rf go-ipfs go-ipfs_v0.20.0_linux-amd64.tar.gz
 
 # Set working directory
 WORKDIR /app
@@ -34,4 +33,4 @@ RUN g++ -o ahmiyat blockchain.cpp dht.cpp wallet.cpp utils.cpp main.cpp -lssl -l
 EXPOSE 5001 8080
 
 # Start IPFS daemon and run the application
-CMD ipfs daemon & sleep 5 && ./ahmiyat ${PORT:-5001}
+CMD ipfs init && ipfs daemon & sleep 5 && ./ahmiyat ${PORT:-5001}
