@@ -4,9 +4,7 @@
 #include <microhttpd.h>
 #include <csignal>
 #include <fstream>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
+#include <sstream>
 
 volatile sig_atomic_t keepRunning = 1;
 
@@ -14,44 +12,51 @@ void signalHandler(int sig) {
     keepRunning = 0;
 }
 
+void log(const std::string& message) {
+    std::ofstream logFile("ahmiyat.log", std::ios::app);
+    logFile << "[" << time(nullptr) << "] " << message << std::endl;
+}
+
 void runNode(AhmiyatChain& chain, int port) {
     chain.startNodeListener(port);
 }
 
-void mineBlock(AhmiyatChain& chain, string minerId) {
+void mineBlock(AhmiyatChain& chain, std::string minerId) {
     Wallet wallet;
-    vector<Transaction> txs = {Transaction(wallet.publicKey, "Babar", 50.0, 0.001, "BALANCE_CHECK=10")};
+    std::vector<Transaction> txs = {Transaction(wallet.publicKey, "Babar", 50.0, 0.001, "BALANCE_CHECK=10")};
     MemoryFragment mem("image", "memories/mountain.jpg", "Mountain trip", wallet.publicKey, 3600);
     chain.addBlock(txs, mem, wallet.publicKey, chain.getBalance(wallet.publicKey));
     chain.adjustDifficulty(txs[0].shardId);
 }
 
-int answer_to_connection(void* cls, struct MHD_Connection* connection, const Wchar* url, 
+int answer_to_connection(void* cls, struct MHD_Connection* connection, const char* url, 
                          const char* method, const char* version, const char* upload_data, 
                          size_t* upload_data_size, void** con_cls) {
     AhmiyatChain* chain = static_cast<AhmiyatChain*>(cls);
-    string response;
-    if (string(method) == "GET") {
-        if (string(url) == "/balance") {
+    std::string response;
+    if (std::string(method) == "GET") {
+        if (std::string(url) == "/balance") {
             const char* addr = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "address");
             const char* shard = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "shard");
-            response = to_string(chain->getBalance(addr ? addr : "genesis", shard ? shard : "0"));
-        } else if (string(url) == "/shard") {
+            response = std::to_string(chain->getBalance(addr ? addr : "genesis", shard ? shard : "0"));
+        } else if (std::string(url) == "/shard") {
             const char* shard = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "shard");
             response = chain->getShardStatus(shard ? shard : "0");
-        } else if (string(url) == "/metrics") {
-            stringstream ss;
-            ss << "blocks_total " << chain->getShardStatus("0").find("Blocks") << "\n";
-            response = ss.str();
         }
-    } else if (string(method) == "POST" && string(url) == "/tx") {
+    } else if (std::string(method) == "POST" && std::string(url) == "/tx") {
         if (*upload_data_size) {
             try {
-                Transaction tx(string(upload_data), "receiver", stod(string(upload_data)), 0.001);
+                std::string data(upload_data, *upload_data_size);
+                std::stringstream ss(data);
+                std::string sender;
+                double amount;
+                std::getline(ss, sender, '&');
+                ss >> amount;
+                Transaction tx(sender, "receiver", amount, 0.001);
                 chain->addPendingTx(tx);
                 response = "Transaction queued";
-            } catch (const exception& e) {
-                response = "Invalid transaction: " + string(e.what());
+            } catch (const std::exception& e) {
+                response = "Invalid transaction: " + std::string(e.what());
             }
             *upload_data_size = 0;
         }
@@ -74,21 +79,34 @@ void runAPI(AhmiyatChain& chain) {
         return;
     }
     log("API server running on port 8080");
-    while (keepRunning) this_thread::sleep_for(chrono::seconds(1));
+    while (keepRunning) std::this_thread::sleep_for(std::chrono::seconds(1));
     MHD_stop_daemon(daemon);
 }
 
-void loadConfig(AhmiyatChain& chain, const string& configFile) {
-    try {
-        ifstream file(configFile);
-        json config;
-        file >> config;
-        for (const auto& node : config["nodes"]) {
-            chain.addNode(node["id"], node["ip"], node["port"]);
+void loadConfig(AhmiyatChain& chain, const std::string& configFile) {
+    std::ifstream file(configFile);
+    if (!file.is_open()) {
+        log("Failed to open config file: " + configFile);
+        return;
+    }
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.find("node:") == 0) {
+            std::string id, ip;
+            int port;
+            std::stringstream ss(line.substr(5));
+            std::getline(ss, id, ',');
+            std::getline(ss, ip, ',');
+            ss >> port;
+            chain.addNode(id, ip, port);
+        } else if (line.find("bootstrap:") == 0) {
+            std::string ip;
+            int port;
+            std::stringstream ss(line.substr(10));
+            std::getline(ss, ip, ',');
+            ss >> port;
+            chain.dht.bootstrap(ip, port);
         }
-        chain.dht.bootstrap(config["bootstrap"]["ip"], config["bootstrap"]["port"]);
-    } catch (const exception& e) {
-        log("Failed to load config: " + string(e.what()));
     }
 }
 
@@ -98,22 +116,22 @@ int main(int argc, char* argv[]) {
         log("Usage: ./ahmiyat <port>");
         return 1;
     }
-    int port = atoi(argv[1]);
+    int port = std::atoi(argv[1]);
 
     system("mkdir -p memories");
 
     AhmiyatChain ahmiyat;
-    loadConfig(ahmiyat, "config.json");
+    loadConfig(ahmiyat, "config.txt");
 
-    thread nodeThread(runNode, ref(ahmiyat), port);
-    thread minerThread(mineBlock, ref(ahmiyat), "Miner" + to_string(port));
-    thread apiThread(runAPI, ref(ahmiyat));
+    std::thread nodeThread(runNode, std::ref(ahmiyat), port);
+    std::thread minerThread(mineBlock, std::ref(ahmiyat), "Miner" + std::to_string(port));
+    std::thread apiThread(runAPI, std::ref(ahmiyat));
 
     minerThread.join();
     ahmiyat.stressTest(10);
 
-    log("Balance of genesis: " + to_string(ahmiyat.getBalance("genesis")));
-    log("Optimized node running on port " + to_string(port));
+    log("Balance of genesis: " + std::to_string(ahmiyat.getBalance("genesis")));
+    log("Optimized node running on port " + std::to_string(port));
 
     apiThread.join();
     nodeThread.detach();
