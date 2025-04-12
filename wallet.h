@@ -5,8 +5,8 @@
 
 class Wallet {
 public:
-    string publicKey;
-    string privateKey;
+    std::string publicKey;
+    std::string privateKey;
     Wallet();
 };
 
