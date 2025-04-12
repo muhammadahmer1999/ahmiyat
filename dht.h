@@ -2,34 +2,29 @@
 #define DHT_H
 
 #include <string>
+#include <vector>
 #include <unordered_map>
 #include <mutex>
-#include <vector>
-#include <utility>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
 struct Node {
     std::string nodeId;
     std::string ip;
     int port;
-    Node() : nodeId(""), ip(""), port(0) {}
-    Node(std::string id, std::string ipAddr, int p);
+    Node(std::string id, std::string ipAddr, int p) : nodeId(id), ip(ipAddr), port(p) {}
 };
 
 class DHT {
 private:
     std::unordered_map<std::string, Node> peers;
     std::mutex dhtMutex;
-    std::string hashNodeId(const std::string& nodeId);
+    std::string bootstrapIp;
+    int bootstrapPort;
 
 public:
+    DHT();
     void addPeer(const Node& node);
-    std::vector<Node> findPeers(const std::string& targetId, int maxPeers = 10);
-    void bootstrap(const std::string& bootstrapIp, int bootstrapPort);
-    bool punchHole(const std::string& targetIp, int targetPort);
+    std::vector<Node> findPeers(const std::string& nodeId, int maxPeers);
+    void bootstrap(const std::string& ip, int port);
 };
 
 #endif
