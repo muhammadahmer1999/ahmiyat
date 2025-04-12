@@ -1,21 +1,28 @@
 #include "wallet.h"
-#include <openssl/ecdsa.h>
-#include <openssl/obj_mac.h>
+#include <openssl/sha.h>
+#include <random>
+#include <sstream>
+#include <iomanip>
 
 Wallet::Wallet() {
-    EC_KEY* key = EC_KEY_new_by_curve_name(NID_secp256k1);
-    EC_KEY_generate_key(key);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 255);
 
-    const EC_POINT* pubKey = EC_KEY_get0_public_key(key);
-    char* pubHex = EC_POINT_point2hex(EC_GROUP_new_by_curve_name(NID_secp256k1), 
-                                      pubKey, POINT_CONVERSION_UNCOMPRESSED, nullptr);
-    publicKey = std::string(pubHex);
-    OPENSSL_free(pubHex);
+    std::string key;
+    for (int i = 0; i < 32; i++) {
+        key += (char)dis(gen);
+    }
 
-    const BIGNUM* privKey = EC_KEY_get0_private_key(key);
-    char* privHex = BN_bn2hex(privKey);
-    privateKey = std::string(privHex);
-    OPENSSL_free(privHex);
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)key.c_str(), key.length(), hash);
 
-    EC_KEY_free(key);
+    std::ostringstream pub, priv;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        pub << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+        priv << std::hex << std::setw(2) << std::setfill('0') << (int)key[i % key.length()];
+    }
+
+    publicKey = pub.str();
+    privateKey = priv.str();
 }
