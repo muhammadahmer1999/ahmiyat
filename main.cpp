@@ -1,7 +1,7 @@
 #include "blockchain.h"
 #include <nlohmann/json.hpp>
 #include <microhttpd.h>
-#include <sstream>  // Added for stringstream
+#include <sstream>
 
 using json = nlohmann::json;
 extern void log(const std::string& message);
@@ -26,7 +26,7 @@ int answer_to_connection(void* cls, struct MHD_Connection* connection, const cha
             std::string shardId = shard ? shard : "0";
             response = chain->getShardStatus(shardId);
         } else if (std::string(url) == "/metrics") {
-            std::stringstream metrics;
+            std::ostringstream metrics;
             metrics << "Total Shards: " << chain->getShardStatus("0").size() << "\n";
             response = metrics.str();
         } else {
