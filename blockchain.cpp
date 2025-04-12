@@ -1,4 +1,5 @@
 #include "blockchain.h"
+#include "utils.h"  // Added to include uploadToStorj
 #include <openssl/sha.h>
 #include <curl/curl.h>
 #include <random>
@@ -8,11 +9,9 @@
 #include <mutex>
 #include <fstream>
 #include <iomanip>
-#include <sstream>  // Added for stringstream
+#include <sstream>
 
 extern void log(const std::string& message);
-extern std::string uploadToIPFS(const std::string& filePath);
-extern std::string generateZKProof(const std::string& data);
 
 Transaction::Transaction(std::string s, std::string r, double a, double f, std::string sc, std::string sh) 
     : sender(s), receiver(r), amount(a), fee(f), script(sc), shardId(sh), 
@@ -44,7 +43,7 @@ bool Transaction::executeScript(const std::unordered_map<std::string, double>& b
 MemoryFragment::MemoryFragment(std::string t, std::string fp, std::string desc, std::string o, int lt) 
     : type(t), filePath(fp), description(desc), owner(o), lockTime(lt) {
     saveToFile();
-    ipfsHash = uploadToIPFS(filePath);
+    fileURL = uploadToStorj(filePath);  // Changed from uploadToIPFS
 }
 
 void MemoryFragment::saveToFile() {
@@ -63,7 +62,7 @@ std::string AhmiyatBlock::calculateHash() const {
     for (const auto& tx : transactions) {
         ss << tx.getHash();
     }
-    ss << memory.ipfsHash << previousHash << memoryProof << stakeWeight << shardId;
+    ss << memory.fileURL << previousHash << memoryProof << stakeWeight << shardId;  // Changed from ipfsHash
 
     std::string input = ss.str();
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -115,7 +114,7 @@ std::string AhmiyatBlock::serialize() const {
         ss << tx.sender << "," << tx.receiver << "," << tx.amount << "," << tx.fee << "," 
            << tx.signature << "," << tx.script << "," << tx.shardId << ";";
     }
-    ss << "|" << memory.type << "," << memory.ipfsHash << "," << memory.description << ","
+    ss << "|" << memory.type << "," << memory.fileURL << "," << memory.description << ","  // Changed from ipfsHash
        << memory.owner << "," << memory.lockTime << "|" << previousHash << "|" << memoryProof 
        << "|" << stakeWeight << "|" << shardId;
     return ss.str();
@@ -190,7 +189,6 @@ void AhmiyatChain::broadcastBlock(const AhmiyatBlock& block, const Node& sender)
 }
 
 std::string AhmiyatChain::signTransaction(const Transaction& tx) {
-    // Simplified signature (bypassing EC_KEY for now due to OpenSSL issues)
     std::string data = tx.toString();
     unsigned char hash[SHA256_DIGEST_LENGTH];
     SHA256((unsigned char*)data.c_str(), data.length(), hash);
@@ -202,7 +200,6 @@ std::string AhmiyatChain::signTransaction(const Transaction& tx) {
 }
 
 bool AhmiyatChain::verifyTransaction(const Transaction& tx) {
-    // Simplified verification (bypassing EC_KEY for now)
     std::string computedSig = signTransaction(tx);
     return computedSig == tx.signature;
 }
