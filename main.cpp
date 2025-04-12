@@ -9,26 +9,32 @@ extern void log(const std::string& message);
 MHD_Result answer_to_connection(void* cls, struct MHD_Connection* connection, const char* url,
                                 const char* method, const char* version, const char* upload_data,
                                 size_t* upload_data_size, void** con_cls) {
-    AhmiyatChain* chain = static_cast<AhmiyatChain*>(cls);
+    Blockchain* chain = static_cast<Blockchain*>(cls);
     std::string response;
     MHD_Result ret;
 
     if (std::string(method) == "GET") {
         if (std::string(url) == "/balance") {
             const char* address = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "address");
-            const char* shard = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "shard");
-            std::string shardId = shard ? shard : "0";
-            double balance = chain->getBalance(address ? address : "", shardId);
-            json j = {{"balance", balance}, {"shard", shardId}};
+            double balance = chain->getBalance(address ? address : "");
+            json j = {{"balance", balance}};
             response = j.dump();
-        } else if (std::string(url) == "/status") {
-            const char* shard = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "shard");
-            std::string shardId = shard ? shard : "0";
-            response = chain->getShardStatus(shardId);
-        } else if (std::string(url) == "/metrics") {
-            std::ostringstream metrics;
-            metrics << "Total Shards: " << chain->getShardStatus("0").size() << "\n";
-            response = metrics.str();
+        } else if (std::string(url) == "/chain") {
+            json j = json::array();
+            for (const auto& block : chain->chain) {
+                json blockJson;
+                blockJson["index"] = block.index;
+                blockJson["hash"] = block.hash;
+                blockJson["previousHash"] = block.previousHash;
+                blockJson["timestamp"] = block.timestamp;
+                json txs = json::array();
+                for (const auto& tx : block.transactions) {
+                    txs.push_back({{"sender", tx.sender}, {"receiver", tx.receiver}, {"amount", tx.amount}});
+                }
+                blockJson["transactions"] = txs;
+                j.push_back(blockJson);
+            }
+            response = j.dump();
         } else {
             response = "Invalid endpoint";
         }
@@ -49,6 +55,7 @@ MHD_Result answer_to_connection(void* cls, struct MHD_Connection* connection, co
                 json j = json::parse(data);
                 Transaction tx(j["sender"], j["receiver"], j["amount"]);
                 chain->addPendingTx(tx);
+                chain->processPendingTxs();
                 response = "Transaction added";
             } catch (const std::exception& e) {
                 response = "Invalid transaction data";
@@ -73,7 +80,7 @@ MHD_Result answer_to_connection(void* cls, struct MHD_Connection* connection, co
     return ret;
 }
 
-void runAPI(AhmiyatChain& chain) {
+void runAPI(Blockchain& chain) {
     struct MHD_Daemon* daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, 8080, nullptr, nullptr,
                                                  &answer_to_connection, &chain, MHD_OPTION_END);
     if (!daemon) {
@@ -87,26 +94,28 @@ void runAPI(AhmiyatChain& chain) {
     MHD_stop_daemon(daemon);
 }
 
-int main(int argc, char** argv) {
-    if (argc != 2) {
-        log("Usage: ./ahmiyat <port>");
-        return 1;
-    }
-
+int main() {
     int sysResult = system("mkdir -p memories");
     if (sysResult != 0) {
         log("Failed to create memories directory");
     }
-    int port = std::stoi(argv[1]);
-    AhmiyatChain ahmiyat;
-    ahmiyat.dht.bootstrap("node1.ahmiyat.example.com", 5001);
 
-    std::thread apiThread(runAPI, std::ref(ahmiyat));
+    std::ofstream file("test.txt");
+    file << "Hello, Storj!";
+    file.close();
+    std::string url = uploadToStorj("test.txt");
+    log("File uploaded to Storj at: " + url);
+
+    Blockchain chain;
+    log("Balance of genesis: " + std::to_string(chain.getBalance("genesis")));
+
+    std::thread apiThread(runAPI, std::ref(chain));
     apiThread.detach();
 
-    log("Balance of genesis: " + std::to_string(ahmiyat.getBalance("genesis", "0")));
-    log("Optimized node running on port " + std::to_string(port));
-    ahmiyat.startNodeListener(port);
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        chain.processPendingTxs();
+    }
 
     return 0;
 }
