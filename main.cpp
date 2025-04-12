@@ -6,12 +6,12 @@
 using json = nlohmann::json;
 extern void log(const std::string& message);
 
-int answer_to_connection(void* cls, struct MHD_Connection* connection, const char* url,
-                         const char* method, const char* version, const char* upload_data,
-                         size_t* upload_data_size, void** con_cls) {
+MHD_Result answer_to_connection(void* cls, struct MHD_Connection* connection, const char* url,
+                                const char* method, const char* version, const char* upload_data,
+                                size_t* upload_data_size, void** con_cls) {
     AhmiyatChain* chain = static_cast<AhmiyatChain*>(cls);
     std::string response;
-    int ret;
+    MHD_Result ret;
 
     if (std::string(method) == "GET") {
         if (std::string(url) == "/balance") {
@@ -93,7 +93,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    system("mkdir -p memories");
+    int sysResult = system("mkdir -p memories");
+    if (sysResult != 0) {
+        log("Failed to create memories directory");
+    }
     int port = std::stoi(argv[1]);
     AhmiyatChain ahmiyat;
     ahmiyat.dht.bootstrap("node1.ahmiyat.example.com", 5001);
