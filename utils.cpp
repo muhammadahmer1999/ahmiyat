@@ -3,18 +3,12 @@
 #include <sstream>
 #include <iomanip>
 #include <curl/curl.h>
-#include <openssl/sha.h>
 #include <cstdlib>
-#include <algorithm>  // Added for std::remove_if
+#include <algorithm>
 
 void log(const std::string& message) {
-    std::ofstream logFile("ahmiyat.log", std::ios::app);
+    std::ofstream logFile("simple_ahmiyat.log", std::ios::app);
     logFile << "[" << time(nullptr) << "] " << message << std::endl;
-}
-
-size_t writeCallback(void* contents, size_t size, size_t nmemb, std::string* data) {
-    data->append((char*)contents, size * nmemb);
-    return size * nmemb;
 }
 
 std::string uploadToStorj(const std::string& filePath) {
@@ -43,7 +37,6 @@ std::string uploadToStorj(const std::string& filePath) {
     }
     pclose(pipe);
 
-    // Remove trailing newline using erase and remove_if
     result.erase(std::remove_if(result.begin(), result.end(), [](char c) { return c == '\n'; }), result.end());
     if (result.empty()) {
         log("Failed to retrieve shareable URL for " + storjPath);
@@ -52,14 +45,4 @@ std::string uploadToStorj(const std::string& filePath) {
 
     log("File accessible at: " + result);
     return result;
-}
-
-std::string generateZKProof(const std::string& data) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)data.c_str(), data.length(), hash);
-    std::ostringstream ss;
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
-    }
-    return "ZKP_" + ss.str().substr(0, 16);
 }
