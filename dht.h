@@ -5,12 +5,13 @@
 #include <unordered_map>
 #include <mutex>
 #include <vector>
-#include <utility> // Added for pair
+#include <utility>
 
 struct Node {
     std::string nodeId;
     std::string ip;
     int port;
+    Node() : nodeId(""), ip(""), port(0) {} // Added default constructor
     Node(std::string id, std::string ipAddr, int p);
 };
 
