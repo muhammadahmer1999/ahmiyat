@@ -5,6 +5,7 @@
 #include <csignal>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 volatile sig_atomic_t keepRunning = 1;
 
@@ -79,7 +80,9 @@ void runAPI(AhmiyatChain& chain) {
         return;
     }
     log("API server running on port 8080");
-    while (keepRunning) std::this_thread::sleep_for(std::chrono::seconds(1));
+    while (keepRunning) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
     MHD_stop_daemon(daemon);
 }
 
@@ -108,6 +111,7 @@ void loadConfig(AhmiyatChain& chain, const std::string& configFile) {
             chain.dht.bootstrap(ip, port);
         }
     }
+    file.close();
 }
 
 int main(int argc, char* argv[]) {
