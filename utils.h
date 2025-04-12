@@ -4,6 +4,7 @@
 #include <string>
 
 void log(const std::string& message);
-std::string uploadToStorj(const std::string& filePath);
+std::string uploadToIPFS(const std::string& filePath);
+std::string generateZKProof(const std::string& data);
 
 #endif
