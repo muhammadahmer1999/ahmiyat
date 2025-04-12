@@ -159,7 +159,7 @@ void AhmiyatChain::broadcastBlock(const AhmiyatBlock& block, const Node& sender)
     std::vector<std::thread> broadcastThreads;
     for (const auto& node : peers) {
         if (node.nodeId != sender.nodeId) {
-            broadcastThreads.emplace_back([this, blockData, node, block]() {
+            broadcastThreads.emplace_back([this, blockData, node, &block]() {
                 int retries = 3;
                 while (retries--) {
                     int sock = socket(AF_INET, SOCK_STREAM, 0);
