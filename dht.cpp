@@ -71,8 +71,9 @@ void DHT::bootstrap(const std::string& bootstrapIp, int bootstrapPort) {
     ssize_t bytesRead = read(sock, buffer, 1024);
     if (bytesRead < 0) {
         log("Failed to read from bootstrap socket");
+    } else {
+        log("Bootstrapped with: " + std::string(buffer));
     }
-    log("Bootstrapped with: " + std::string(buffer));
     close(sock);
 }
 
