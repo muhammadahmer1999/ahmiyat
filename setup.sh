@@ -8,26 +8,31 @@ sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
 sudo apt-get update -y
 
 echo "Installing dependencies..."
-# Correct package names and ensure availability
+# Install required packages
 sudo apt-get install -y libssl-dev libcurl4-openssl-dev
-# Install leveldb (sometimes named differently)
+# Install leveldb (with fallback)
 sudo apt-get install -y libleveldb-dev || sudo apt-get install -y libsnappy-dev
 # Install microhttpd
 sudo apt-get install -y libmicrohttpd-dev
-# Install nlohmann-json (correct package name)
+# Install nlohmann-json (with fallback)
 sudo apt-get install -y nlohmann-json3-dev || sudo apt-get install -y libnlohmann-json-dev
 
-# Install IPFS
+# Install IPFS using a more reliable method for Codespaces
+echo "Installing IPFS..."
+# Download IPFS binary
+curl -L https://dist.ipfs.io/go-ipfs/v0.10.0/go-ipfs_v0.10.0_linux-amd64.tar.gz -o go-ipfs.tar.gz
+tar -xvzf go-ipfs.tar.gz
+cd go-ipfs
+sudo mv ipfs /usr/local/bin/
+cd ..
+rm -rf go-ipfs go-ipfs.tar.gz
+
+# Verify IPFS installation
 if ! command -v ipfs &> /dev/null; then
-    echo "Installing IPFS..."
-    # Download and install IPFS
-    wget https://dist.ipfs.io/go-ipfs/v0.10.0/go-ipfs_v0.10.0_linux-amd64.tar.gz
-    tar -xvzf go-ipfs_v0.10.0_linux-amd64.tar.gz
-    cd go-ipfs
-    sudo bash install.sh
-    cd ..
-    rm -rf go-ipfs go-ipfs_v0.10.0_linux-amd64.tar.gz
+    echo "IPFS installation failed. Exiting..."
+    exit 1
 fi
+echo "IPFS installed successfully!"
 
 # Initialize and start IPFS daemon
 echo "Starting IPFS daemon..."
