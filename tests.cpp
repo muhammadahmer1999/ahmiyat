@@ -27,10 +27,25 @@ void testShardManager() {
     std::cout << "Shard manager test passed\n";
 }
 
+void testChainBalance() {
+    AhmiyatChain chain;
+    assert(chain.getBalance("genesis", "0") == 100.0);
+    std::cout << "Chain balance test passed\n";
+}
+
+void testTransactionCreation() {
+    Wallet wallet;
+    Transaction tx(wallet.publicKey, "test", 10.0);
+    assert(tx.validate() == true);
+    std::cout << "Transaction creation test passed\n";
+}
+
 int main() {
     testTransactionValidation();
     testMemoryFragment();
     testShardManager();
+    testChainBalance();
+    testTransactionCreation();
     std::cout << "All tests passed!\n";
     return 0;
 }
