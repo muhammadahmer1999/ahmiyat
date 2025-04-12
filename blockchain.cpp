@@ -8,6 +8,11 @@
 #include <chrono>
 #include <stdexcept>
 #include <fstream>
+#include <thread>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 extern void log(const std::string& message);
 extern std::string uploadToIPFS(const std::string& filePath);
