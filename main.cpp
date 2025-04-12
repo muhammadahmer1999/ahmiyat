@@ -1,121 +1,121 @@
 #include "blockchain.h"
-#include <nlohmann/json.hpp>
+#include <thread>
+#include <iostream>
 #include <microhttpd.h>
-#include <sstream>
+#include <csignal>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
-extern void log(const std::string& message);
 
-MHD_Result answer_to_connection(void* cls, struct MHD_Connection* connection, const char* url,
-                                const char* method, const char* version, const char* upload_data,
-                                size_t* upload_data_size, void** con_cls) {
-    Blockchain* chain = static_cast<Blockchain*>(cls);
-    std::string response;
-    MHD_Result ret;
+volatile sig_atomic_t keepRunning = 1;
 
-    if (std::string(method) == "GET") {
-        if (std::string(url) == "/balance") {
-            const char* address = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "address");
-            double balance = chain->getBalance(address ? address : "");
-            json j = {{"balance", balance}};
-            response = j.dump();
-        } else if (std::string(url) == "/chain") {
-            json j = json::array();
-            for (const auto& block : chain->chain) {
-                json blockJson;
-                blockJson["index"] = block.index;
-                blockJson["hash"] = block.hash;
-                blockJson["previousHash"] = block.previousHash;
-                blockJson["timestamp"] = block.timestamp;
-                json txs = json::array();
-                for (const auto& tx : block.transactions) {
-                    txs.push_back({{"sender", tx.sender}, {"receiver", tx.receiver}, {"amount", tx.amount}});
-                }
-                blockJson["transactions"] = txs;
-                j.push_back(blockJson);
-            }
-            response = j.dump();
-        } else {
-            response = "Invalid endpoint";
+void signalHandler(int sig) {
+    keepRunning = 0;
+}
+
+void runNode(AhmiyatChain& chain, int port) {
+    chain.startNodeListener(port);
+}
+
+void mineBlock(AhmiyatChain& chain, string minerId) {
+    Wallet wallet;
+    vector<Transaction> txs = {Transaction(wallet.publicKey, "Babar", 50.0, 0.001, "BALANCE_CHECK=10")};
+    MemoryFragment mem("image", "memories/mountain.jpg", "Mountain trip", wallet.publicKey, 3600);
+    chain.addBlock(txs, mem, wallet.publicKey, chain.getBalance(wallet.publicKey));
+    chain.adjustDifficulty(txs[0].shardId);
+}
+
+int answer_to_connection(void* cls, struct MHD_Connection* connection, const Wchar* url, 
+                         const char* method, const char* version, const char* upload_data, 
+                         size_t* upload_data_size, void** con_cls) {
+    AhmiyatChain* chain = static_cast<AhmiyatChain*>(cls);
+    string response;
+    if (string(method) == "GET") {
+        if (string(url) == "/balance") {
+            const char* addr = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "address");
+            const char* shard = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "shard");
+            response = to_string(chain->getBalance(addr ? addr : "genesis", shard ? shard : "0"));
+        } else if (string(url) == "/shard") {
+            const char* shard = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "shard");
+            response = chain->getShardStatus(shard ? shard : "0");
+        } else if (string(url) == "/metrics") {
+            stringstream ss;
+            ss << "blocks_total " << chain->getShardStatus("0").find("Blocks") << "\n";
+            response = ss.str();
         }
-
-        struct MHD_Response* mhd_response = MHD_create_response_from_buffer(response.length(),
-                                                                            (void*)response.c_str(),
-                                                                            MHD_RESPMEM_MUST_COPY);
-        ret = MHD_queue_response(connection, MHD_HTTP_OK, mhd_response);
-        MHD_destroy_response(mhd_response);
-        return ret;
-    }
-
-    if (std::string(method) == "POST" && std::string(url) == "/tx") {
-        if (*upload_data_size != 0) {
-            std::string data(upload_data, *upload_data_size);
-            *upload_data_size = 0;
+    } else if (string(method) == "POST" && string(url) == "/tx") {
+        if (*upload_data_size) {
             try {
-                json j = json::parse(data);
-                Transaction tx(j["sender"], j["receiver"], j["amount"]);
+                Transaction tx(string(upload_data), "receiver", stod(string(upload_data)), 0.001);
                 chain->addPendingTx(tx);
-                chain->processPendingTxs();
-                response = "Transaction added";
-            } catch (const std::exception& e) {
-                response = "Invalid transaction data";
+                response = "Transaction queued";
+            } catch (const exception& e) {
+                response = "Invalid transaction: " + string(e.what());
             }
-
-            struct MHD_Response* mhd_response = MHD_create_response_from_buffer(response.length(),
-                                                                                (void*)response.c_str(),
-                                                                                MHD_RESPMEM_MUST_COPY);
-            ret = MHD_queue_response(connection, MHD_HTTP_OK, mhd_response);
-            MHD_destroy_response(mhd_response);
-            return ret;
+            *upload_data_size = 0;
         }
-        return MHD_YES;
     }
 
-    response = "Method not supported";
-    struct MHD_Response* mhd_response = MHD_create_response_from_buffer(response.length(),
-                                                                        (void*)response.c_str(),
-                                                                        MHD_RESPMEM_MUST_COPY);
-    ret = MHD_queue_response(connection, MHD_HTTP_BAD_REQUEST, mhd_response);
+    struct MHD_Response* mhd_response = MHD_create_response_from_buffer(response.length(), 
+                                                                       (void*)response.c_str(), 
+                                                                       MHD_RESPMEM_MUST_COPY);
+    int ret = MHD_queue_response(connection, MHD_HTTP_OK, mhd_response);
     MHD_destroy_response(mhd_response);
     return ret;
 }
 
-void runAPI(Blockchain& chain) {
-    struct MHD_Daemon* daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, 8080, nullptr, nullptr,
-                                                 &answer_to_connection, &chain, MHD_OPTION_END);
+void runAPI(AhmiyatChain& chain) {
+    struct MHD_Daemon* daemon = MHD_start_daemon(MHD_USE_EPOLL | MHD_USE_THREAD_PER_CONNECTION, 
+                                                 8080, NULL, NULL, &answer_to_connection, 
+                                                 &chain, MHD_OPTION_END);
     if (!daemon) {
         log("Failed to start API server");
         return;
     }
     log("API server running on port 8080");
-    while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+    while (keepRunning) this_thread::sleep_for(chrono::seconds(1));
     MHD_stop_daemon(daemon);
 }
 
-int main() {
-    int sysResult = system("mkdir -p memories");
-    if (sysResult != 0) {
-        log("Failed to create memories directory");
+void loadConfig(AhmiyatChain& chain, const string& configFile) {
+    try {
+        ifstream file(configFile);
+        json config;
+        file >> config;
+        for (const auto& node : config["nodes"]) {
+            chain.addNode(node["id"], node["ip"], node["port"]);
+        }
+        chain.dht.bootstrap(config["bootstrap"]["ip"], config["bootstrap"]["port"]);
+    } catch (const exception& e) {
+        log("Failed to load config: " + string(e.what()));
     }
+}
 
-    std::ofstream file("test.txt");
-    file << "Hello, Storj!";
-    file.close();
-    std::string url = uploadToStorj("test.txt");
-    log("File uploaded to Storj at: " + url);
-
-    Blockchain chain;
-    log("Balance of genesis: " + std::to_string(chain.getBalance("genesis")));
-
-    std::thread apiThread(runAPI, std::ref(chain));
-    apiThread.detach();
-
-    while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        chain.processPendingTxs();
+int main(int argc, char* argv[]) {
+    signal(SIGINT, signalHandler);
+    if (argc < 2) {
+        log("Usage: ./ahmiyat <port>");
+        return 1;
     }
+    int port = atoi(argv[1]);
 
+    system("mkdir -p memories");
+
+    AhmiyatChain ahmiyat;
+    loadConfig(ahmiyat, "config.json");
+
+    thread nodeThread(runNode, ref(ahmiyat), port);
+    thread minerThread(mineBlock, ref(ahmiyat), "Miner" + to_string(port));
+    thread apiThread(runAPI, ref(ahmiyat));
+
+    minerThread.join();
+    ahmiyat.stressTest(10);
+
+    log("Balance of genesis: " + to_string(ahmiyat.getBalance("genesis")));
+    log("Optimized node running on port " + to_string(port));
+
+    apiThread.join();
+    nodeThread.detach();
     return 0;
 }
